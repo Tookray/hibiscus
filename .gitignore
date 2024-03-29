@@ -4,5 +4,9 @@
 # But don't ignore these files...
 !.gitignore
 
+# Build files.
+!.clangd
+!Makefile
+
 # Source files.
 !main.cpp

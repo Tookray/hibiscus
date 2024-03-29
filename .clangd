@@ -1,0 +1,13 @@
+CompileFlags:
+    Add:
+        - -std=c++23
+        - -stdlib=libc++
+        # Unfortunatly, I think I need to hardcode the include path...
+        - -I/home/linuxbrew/.linuxbrew/include
+        - -DDEBUG
+
+Diagnostics:
+    ClangTidy:
+        Add: bugprone-*
+
+    UnusedIncludes: Strict
