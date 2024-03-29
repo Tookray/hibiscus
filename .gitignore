@@ -1,0 +1,8 @@
+# Ignore everything by default.
+*
+
+# But don't ignore these files...
+!.gitignore
+
+# Source files.
+!main.cpp
