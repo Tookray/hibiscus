@@ -37,5 +37,8 @@ all: $(TARGET)
 $(TARGET): $(SOURCES)
 	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCES)
 
+format:
+	clang-format -i $(SOURCES)
+
 clean:
 	rm -f $(TARGET)
