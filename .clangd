@@ -1,13 +1,19 @@
 CompileFlags:
     Add:
         - -std=c++23
-        - -stdlib=libc++
-        # Unfortunatly, I think I need to hardcode the include path...
+        - -nostdinc++
+        - -I/home/linuxbrew/.linuxbrew/opt/llvm/include/c++/v1
         - -I/home/linuxbrew/.linuxbrew/include
         - -DDEBUG
 
 Diagnostics:
     ClangTidy:
-        Add: bugprone-*
+        Add:
+            - bugprone*
+            - modernize*
+            - readability*
+
+        Remove:
+            - modernize-use-trailing-return-type
 
     UnusedIncludes: Strict

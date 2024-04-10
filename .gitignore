@@ -3,9 +3,12 @@
 
 # But don't ignore these files...
 !.gitignore
+!.gitmodules
+
+# LSP files.
+!.clangd
 
 # Build files.
-!.clangd
 !Makefile
 
 # Source files.
