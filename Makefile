@@ -30,7 +30,7 @@ CFLAGS =                                    \
 TARGET = hibiscus
 
 # Source files.
-SOURCES = main.cpp
+SOURCES = main.cpp freelist.cpp chi/panic.cpp
 
 all: $(TARGET)
 
@@ -38,7 +38,7 @@ $(TARGET): $(SOURCES)
 	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCES)
 
 format:
-	clang-format -i $(SOURCES)
+	clang-format -i *.cpp *.h
 
 clean:
 	rm -f $(TARGET)

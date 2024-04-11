@@ -13,3 +13,8 @@
 
 # Source files.
 !main.cpp
+
+!block.h
+
+!freelist.h
+!freelist.cpp
