@@ -30,7 +30,7 @@ CFLAGS =                                    \
 TARGET = hibiscus
 
 # Source files.
-SOURCES = main.cpp freelist.cpp chi/panic.cpp
+SOURCES = main.cpp freelist.cpp hibiscus.cpp chi/panic.cpp
 
 all: $(TARGET)
 

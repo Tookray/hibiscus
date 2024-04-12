@@ -19,12 +19,6 @@ public:
   // No default constructor please!
   Block() = delete;
 
-  // With this, we can do static cast a void pointer to a 'Block' pointer
-  // instead of using a reinterpret cast (which is not good practice).
-  // form
-  Block(void *ptr __attribute__((unused)))
-      : size(0), next(nullptr), prev(nullptr) {}
-
   // Return the address of the data.
   void *data() {
     // The way that pointer arithmetic works is that it depends on the type of
