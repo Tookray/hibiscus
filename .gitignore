@@ -5,8 +5,9 @@
 !.gitignore
 !.gitmodules
 
-# LSP files.
+# Tools.
 !.clangd
+!.editorconfig
 
 # Build files.
 !Makefile
