@@ -18,6 +18,7 @@
 !main.cpp
 
 !block.h
+!block.cpp
 
 !freelist.h
 !freelist.cpp

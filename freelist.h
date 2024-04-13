@@ -21,6 +21,10 @@ bool contains(Block *block);
 // Get the first block that matches the predicate.
 Block *first(std::function<bool(Block *)> predicate);
 
+// Iterate over each block in the list and call the callback function for each
+// element.
+void for_each(std::function<void(Block *)> callback);
+
 // Get the front block of the list.
 Block *front();
 

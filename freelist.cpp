@@ -1,6 +1,5 @@
 #include <cassert>
 #include <functional>
-#include <iostream>
 
 #include "chi/panic.h"
 
@@ -59,8 +58,6 @@ void append(Block *block) {
 
 #ifdef DEBUG
   check(list);
-
-  std::cout << "Added block with size " << block->size << " to the list.\n";
 #endif
 }
 
@@ -96,6 +93,16 @@ Block *first(std::function<bool(Block *)> predicate) {
   }
 
   return nullptr;
+}
+
+void for_each(std::function<void(Block *)> callback) {
+  Block *current = list;
+
+  while (current != nullptr) {
+    callback(current);
+
+    current = current->next;
+  }
 }
 
 Block *front() {
@@ -139,8 +146,6 @@ Block *pop_back() {
 #ifdef DEBUG
   check(list);
   check(tail);
-
-  std::cout << "Removed block with size " << tail->size << " from the list.\n";
 #endif
 
   return tail;
@@ -168,8 +173,6 @@ Block *pop_front() {
 #ifdef DEBUG
   check(list);
   check(head);
-
-  std::cout << "Removed block with size " << head->size << " from the list.\n";
 #endif
 
   return head;
@@ -205,8 +208,6 @@ void push_front(Block *block) {
 
 #ifdef DEBUG
   check(list);
-
-  std::cout << "Added block with size " << block->size << " to the list.\n";
 #endif
 }
 
@@ -240,8 +241,6 @@ void remove(Block *block) {
 #ifdef DEBUG
   check(list);
   check(block);
-
-  std::cout << "Removed block with size " << block->size << " from the list.\n";
 #endif
 }
 } // namespace hibiscus::dll

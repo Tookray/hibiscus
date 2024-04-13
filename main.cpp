@@ -1,21 +1,27 @@
-#include <iostream>
+#include <cstddef>
+#include <vector>
 
 #include "chi/panic.h"
 
 #include "hibiscus.h"
 
+constexpr const size_t COUNT = 3;
+constexpr const size_t DATA_SIZE = 2000;
+
 int main() {
-  for (int i = 0; i < 10; ++i) {
-    int *ptr = static_cast<int *>(hibiscus::allocate(500));
+  std::vector<int *> ptrs = std::vector<int *>(COUNT);
+
+  for (size_t i = 0; i < COUNT; ++i) {
+    int *ptr = static_cast<int *>(hibiscus::allocate(DATA_SIZE));
 
     if (ptr == nullptr) {
       chi::panic("Failed to allocate memory!");
     }
 
-    *ptr = i;
+    ptrs.emplace_back(ptr);
+  }
 
-    std::cout << *ptr << std::endl;
-
+  for (int *ptr : ptrs) {
     hibiscus::free(ptr);
   }
 }
