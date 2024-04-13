@@ -5,7 +5,7 @@ CC = clang++
 # According to to the [documentation](https://libcxx.llvm.org/UsingLibcxx.html)
 # you need to use the following flags to use a custom build of `libc++` for
 # `clang`.
-CUSTOM_LIBCXX =                                         \
+CUSTOM_LIBCXX =                                       \
 	-nostdinc++                                         \
 	-nostdlib++                                         \
 	-isystem $(shell brew --prefix llvm)/include/c++/v1 \
@@ -14,16 +14,16 @@ CUSTOM_LIBCXX =                                         \
 	-lc++
 
 # Compiler flags.
-CFLAGS =                                    \
+CFLAGS =                                  \
 	-std=c++23                              \
 	-stdlib=libc++                          \
-	$(CUSTOM_LIBCXX)			            \
+	$(CUSTOM_LIBCXX)                        \
 	-isystem $(shell brew --prefix)/include \
-	-Wall								    \
-	-Wextra								    \
-	-Wpedantic							    \
-	-Werror								    \
-	-g 									    \
+	-Wall                                   \
+	-Wextra                                 \
+	-Wpedantic                              \
+	-Werror                                 \
+	-g                                      \
 	-DDEBUG
 
 # Target executable.

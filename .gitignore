@@ -5,6 +5,8 @@
 !.gitignore
 !.gitmodules
 
+!README.md
+
 # Tools.
 !.clangd
 !.editorconfig

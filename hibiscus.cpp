@@ -1,7 +1,7 @@
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
-#include <optional>
 #include <sys/mman.h>
 #include <utility>
 #include <valgrind/memcheck.h>
@@ -51,22 +51,33 @@ std::pair<hibiscus::Block *, hibiscus::Block *> page_split(void *ptr,
   return std::make_pair(left, right);
 }
 
-// Grab a page from the system.
-void *page_alloc() {
-  void *ptr = mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE,
+// Get memory from the system.
+void *alloc(size_t size) {
+  if (size == 0) {
+    return nullptr;
+  }
+
+  // Request some multiple of the page size from the system.
+  // i.e. we want size < n * PAGE_SIZE => n = ceil(size / PAGE_SIZE)
+  size_t total = static_cast<size_t>(ceil(size / PAGE_SIZE) * PAGE_SIZE);
+
+  void *ptr = mmap(nullptr, total, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
   if (ptr == MAP_FAILED) {
     // The system didn't give us a page of memory, let's abort.
-    chi::panic("Failed to allocate a page of memory");
+    chi::panic("Failed to allocate memory from the system");
   }
 
   // Valgrind and friends do not know about the memory we just allocated, so
   // we need to tell them about it.
-  VALGRIND_MALLOCLIKE_BLOCK(ptr, PAGE_SIZE, 0, 0);
+  VALGRIND_MALLOCLIKE_BLOCK(ptr, total, 0, 0);
 
   return ptr;
 }
+
+// Grab a page from the system.
+void *page_alloc() { return alloc(PAGE_SIZE); }
 
 // Release a page back to the system.
 void page_free(void *ptr) {
@@ -93,18 +104,34 @@ void *allocate(size_t size) {
     return nullptr;
   }
 
-  if (size > PAGE_SIZE - sizeof(Block)) {
-    // This is just a limitation of the current implementation, we can fix this
-    // later.
-    return nullptr;
+  // The total size of a chunk we need.
+  size_t total = size + sizeof(Block);
+
+  // Requested allocation is larger than a page.
+  if (total > PAGE_SIZE) {
+    void *ptr = alloc(total);
+
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+
+    Block *block = reinterpret_cast<Block *>(ptr);
+
+    block->size = size;
+    block->next = nullptr;
+    block->prev = nullptr;
+
+    return block->data();
   }
 
   // Try to grab a block from the free list.
-  std::optional<Block *> block = dll::first(
+  Block *block = dll::first(
       [size](hibiscus::Block *block) { return block->size >= size; });
 
-  if (block) {
-    return block.value()->data();
+  if (block != nullptr) {
+    dll::remove(block);
+
+    return block->data();
   }
 
   // If we can't, then we'll need to allocate a new page and carve out a block
@@ -121,9 +148,7 @@ void *allocate(size_t size) {
   assert(left != nullptr && "The left block should never be a null pointer");
 
   if (right != nullptr) {
-    if (auto result = dll::push_front(right); !result) {
-      chi::panic("Failed to add the right block to the free list");
-    }
+    dll::push_front(right);
   }
 
   return left->data();
@@ -144,8 +169,6 @@ void free(void *ptr) {
   // --------------------------------------------------------------------------
 
   // Add the block back to the free list.
-  if (auto result = dll::push_front(header); !result) {
-    chi::panic("Failed to add the block back to the free list");
-  }
+  dll::push_front(header);
 }
 } // namespace hibiscus

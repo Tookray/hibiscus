@@ -1,6 +1,5 @@
-#include <expected>
+#include <cassert>
 #include <functional>
-#include <optional>
 
 #include "chi/panic.h"
 
@@ -39,36 +38,27 @@ void check(hibiscus::Block *list) {
 namespace hibiscus::dll {
 Block *list = nullptr;
 
-std::expected<void, Error> append(Block *block) {
+void append(Block *block) {
 #ifdef DEBUG
-  if (block == nullptr) {
-    chi::panic("Why are you trying to append a null block?");
-  }
-
   check(block);
 #endif
 
-  if (block == nullptr) {
-    return std::unexpected<Error>(Error::NullBlock);
-  }
+  assert(block != nullptr);
+  assert(block->size != 0);
 
-  if (block->size == 0) {
-    return std::unexpected<Error>(Error::ZeroSize);
-  }
+  Block *tail = back();
 
-  if (auto tail = back(); tail.has_value()) {
-    tail.value()->next = block;
-    block->prev = tail.value();
+  if (tail != nullptr) {
+    tail->next = block;
+    block->prev = tail;
   } else {
     list = block;
   }
-
-  return {};
 }
 
-std::optional<Block *> back() {
+Block *back() {
   if (list == nullptr) {
-    return std::nullopt;
+    return nullptr;
   }
 
   Block *current = list;
@@ -83,20 +73,10 @@ std::optional<Block *> back() {
 void clear() { chi::panic("Why are you trying to clear the free list?"); }
 
 bool contains(Block *block) {
-  Block *current = list;
-
-  while (current != nullptr) {
-    if (current == block) {
-      return true;
-    }
-
-    current = current->next;
-  }
-
-  return false;
+  return first([block](Block *current) { return current == block; }) != nullptr;
 }
 
-std::optional<Block *> first(std::function<bool(Block *)> predicate) {
+Block *first(std::function<bool(Block *)> predicate) {
   Block *current = list;
 
   while (current != nullptr) {
@@ -107,12 +87,12 @@ std::optional<Block *> first(std::function<bool(Block *)> predicate) {
     current = current->next;
   }
 
-  return std::nullopt;
+  return nullptr;
 }
 
-std::optional<Block *> front() {
+Block *front() {
   if (list == nullptr) {
-    return std::nullopt;
+    return nullptr;
   }
 
   return list;
@@ -132,23 +112,26 @@ size_t len() {
   return length;
 }
 
-std::optional<Block *> pop_back() {
-  if (auto tail = back(); tail.has_value()) {
-    if (tail.value()->prev != nullptr) {
-      tail.value()->prev->next = nullptr;
-    }
-
-    tail.value()->prev = nullptr;
-
-    return tail.value();
+Block *pop_back() {
+  if (list == nullptr) {
+    return nullptr;
   }
 
-  return std::nullopt;
+  Block *tail = back();
+
+  if (tail->prev != nullptr) {
+    tail->prev->next = nullptr;
+  }
+
+  // Detach the node from the list.
+  tail->prev = nullptr;
+
+  return tail;
 }
 
-std::optional<Block *> pop_front() {
+Block *pop_front() {
   if (list == nullptr) {
-    return std::nullopt;
+    return nullptr;
   }
 
   Block *head = list;
@@ -166,27 +149,18 @@ std::optional<Block *> pop_front() {
   return head;
 }
 
-std::expected<void, Error> push_back(Block *block) {
+void push_back(Block *block) {
   // This function is the same as calling 'append'.
   return append(block);
 }
 
-std::expected<void, Error> push_front(Block *block) {
+void push_front(Block *block) {
 #ifdef DEBUG
-  if (block == nullptr) {
-    chi::panic("Why are you trying to prepend a null block?");
-  }
-
   check(block);
 #endif
 
-  if (block == nullptr) {
-    return std::unexpected<Error>(Error::NullBlock);
-  }
-
-  if (block->size == 0) {
-    return std::unexpected<Error>(Error::ZeroSize);
-  }
+  assert(block != nullptr);
+  assert(block->size != 0);
 
   if (list == nullptr) {
     list = block;
@@ -201,14 +175,10 @@ std::expected<void, Error> push_front(Block *block) {
     // Update the head of the list.
     list = block;
   }
-
-  return {};
 }
 
-std::expected<void, Error> remove(Block *block) {
-  if (block == nullptr) {
-    return std::unexpected<Error>(Error::NullBlock);
-  }
+void remove(Block *block) {
+  assert(block != nullptr);
 
 #ifdef DEBUG
   // Make sure that the block is in the list.
@@ -231,7 +201,5 @@ std::expected<void, Error> remove(Block *block) {
 
   block->next = nullptr;
   block->prev = nullptr;
-
-  return {};
 }
 } // namespace hibiscus::dll
