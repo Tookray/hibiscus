@@ -1,5 +1,6 @@
 #include <cassert>
 #include <functional>
+#include <iostream>
 
 #include "chi/panic.h"
 
@@ -40,6 +41,7 @@ Block *list = nullptr;
 
 void append(Block *block) {
 #ifdef DEBUG
+  check(list);
   check(block);
 #endif
 
@@ -54,6 +56,12 @@ void append(Block *block) {
   } else {
     list = block;
   }
+
+#ifdef DEBUG
+  check(list);
+
+  std::cout << "Added block with size " << block->size << " to the list.\n";
+#endif
 }
 
 Block *back() {
@@ -113,9 +121,11 @@ size_t len() {
 }
 
 Block *pop_back() {
-  if (list == nullptr) {
-    return nullptr;
-  }
+  assert(list != nullptr);
+
+#ifdef DEBUG
+  check(list);
+#endif
 
   Block *tail = back();
 
@@ -126,13 +136,22 @@ Block *pop_back() {
   // Detach the node from the list.
   tail->prev = nullptr;
 
+#ifdef DEBUG
+  check(list);
+  check(tail);
+
+  std::cout << "Removed block with size " << tail->size << " from the list.\n";
+#endif
+
   return tail;
 }
 
 Block *pop_front() {
-  if (list == nullptr) {
-    return nullptr;
-  }
+  assert(list != nullptr);
+
+#ifdef DEBUG
+  check(list);
+#endif
 
   Block *head = list;
 
@@ -146,17 +165,25 @@ Block *pop_front() {
 
   head->next = nullptr;
 
+#ifdef DEBUG
+  check(list);
+  check(head);
+
+  std::cout << "Removed block with size " << head->size << " from the list.\n";
+#endif
+
   return head;
 }
 
 void push_back(Block *block) {
   // This function is the same as calling 'append'.
-  return append(block);
+  append(block);
 }
 
 void push_front(Block *block) {
 #ifdef DEBUG
   check(block);
+  check(list);
 #endif
 
   assert(block != nullptr);
@@ -175,12 +202,20 @@ void push_front(Block *block) {
     // Update the head of the list.
     list = block;
   }
+
+#ifdef DEBUG
+  check(list);
+
+  std::cout << "Added block with size " << block->size << " to the list.\n";
+#endif
 }
 
 void remove(Block *block) {
   assert(block != nullptr);
 
 #ifdef DEBUG
+  check(list);
+
   // Make sure that the block is in the list.
   if (!contains(block)) {
     chi::panic("Why are you trying to remove a block that is not in the list?");
@@ -201,5 +236,12 @@ void remove(Block *block) {
 
   block->next = nullptr;
   block->prev = nullptr;
+
+#ifdef DEBUG
+  check(list);
+  check(block);
+
+  std::cout << "Removed block with size " << block->size << " from the list.\n";
+#endif
 }
 } // namespace hibiscus::dll
