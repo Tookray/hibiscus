@@ -15,36 +15,38 @@
 // The page size of the system.
 constexpr const size_t PAGE_SIZE = 4096;
 
-// Split a page into two blocks. The first block will be of header size plus
-// the size requested, and the second block will be the remainder of the page.
-// However, if the second block is unable to hold one or more bytes, then it
-// will not be set.
-std::pair<hibiscus::Block *, hibiscus::Block *> page_split(void *ptr,
-                                                           size_t size) {
-  if (ptr == nullptr || size == 0 ||
-      size > PAGE_SIZE - sizeof(hibiscus::Block)) {
-    // Something went wrong, the arguments you passed are invalid. You should
-    // probably fix that.
-    chi::panic("Invalid arguments to page_split: ptr = {}, size = {}", ptr,
-               size);
-  }
+// Split a chunk of memory into two blocks, one with data size `size` and the
+// other with the remaining size.
+std::pair<hibiscus::Block *, hibiscus::Block *> split(void *ptr, size_t total, size_t size) {
+  assert(ptr != nullptr);
+  assert(size != 0 && sizeof(hibiscus::Block) + size <= total);
 
+  // +-------------------------------+
+  // |             Total             |
+  // +---------------+---------------+
+  // |     left      |     right     |
+  // +---------------+---------------+
+  // | Header | Data | Header | Data |
+  // +---------------+---------------+
+
+  size_t left_size = sizeof(hibiscus::Block) + size;
   hibiscus::Block *left = reinterpret_cast<hibiscus::Block *>(ptr);
 
   left->size = size;
   left->next = nullptr;
   left->prev = nullptr;
 
-  if (sizeof(hibiscus::Block) + size + sizeof(hibiscus::Block) >= PAGE_SIZE) {
-    // There isn't enough space for a second block.
+  if (left_size + sizeof(hibiscus::Block) + 1 > total) {
+    // We can't make a right block, so we'll need to extend the left block.
+    left->size = total - sizeof(hibiscus::Block);
+
     return std::make_pair(left, nullptr);
   }
 
-  hibiscus::Block *right = reinterpret_cast<hibiscus::Block *>(
-      static_cast<std::byte *>(ptr) + sizeof(hibiscus::Block) + size);
+  size_t right_size = total - left_size - sizeof(hibiscus::Block);
+  hibiscus::Block *right = reinterpret_cast<hibiscus::Block *>(static_cast<std::byte *>(ptr) + left_size);
 
-  right->size =
-      PAGE_SIZE - sizeof(hibiscus::Block) - size - sizeof(hibiscus::Block);
+  right->size = right_size;
   right->next = nullptr;
   right->prev = nullptr;
 
@@ -104,12 +106,9 @@ void *allocate(size_t size) {
     return nullptr;
   }
 
-  // The total size of a chunk we need.
-  size_t total = size + sizeof(Block);
-
   // Requested allocation is larger than a page.
-  if (total > PAGE_SIZE) {
-    void *ptr = alloc(total);
+  if (sizeof(Block) + size > PAGE_SIZE) {
+    void *ptr = alloc(sizeof(Block) + size);
 
     if (ptr == nullptr) {
       return nullptr;
@@ -124,6 +123,8 @@ void *allocate(size_t size) {
     return block->data();
   }
 
+  size_t total = 0;
+
   // Try to grab a block from the free list.
   Block *block = dll::first(
       [size](hibiscus::Block *block) { return block->size >= size; });
@@ -131,20 +132,19 @@ void *allocate(size_t size) {
   if (block != nullptr) {
     dll::remove(block);
 
-    return block->data();
+    total = sizeof(Block) + block->size;
+  } else {
+    // Can't use a pre-existing block, so we'll need a new page.
+    block = static_cast<Block *>(page_alloc());
+
+    if (block == nullptr) {
+      return nullptr;
+    }
+
+    total = PAGE_SIZE;
   }
 
-  // If we can't, then we'll need to allocate a new page and carve out a block
-  // from it.
-  void *page = page_alloc();
-
-  if (page == nullptr) {
-    // We couldn't allocate a page.
-    return nullptr;
-  }
-
-  auto [left, right] = page_split(page, size);
-
+  auto [left, right] = split(block, total, size);
   assert(left != nullptr && "The left block should never be a null pointer");
 
   if (right != nullptr) {

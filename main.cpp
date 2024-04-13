@@ -5,15 +5,17 @@
 #include "hibiscus.h"
 
 int main() {
-  int *ptr = static_cast<int *>(hibiscus::allocate(sizeof(int)));
+  for (int i = 0; i < 10; ++i) {
+    int *ptr = static_cast<int *>(hibiscus::allocate(500));
 
-  if (ptr == nullptr) {
-    chi::panic("Failed to allocate memory");
+    if (ptr == nullptr) {
+      chi::panic("Failed to allocate memory!");
+    }
+
+    *ptr = i;
+
+    std::cout << *ptr << std::endl;
+
+    hibiscus::free(ptr);
   }
-
-  *ptr = 42;
-
-  std::cout << "The value of ptr is " << *ptr << std::endl;
-
-  hibiscus::free(ptr);
 }
