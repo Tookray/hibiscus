@@ -25,3 +25,6 @@
 
 !hibiscus.h
 !hibiscus.cpp
+
+!slab.h
+!slab.cpp

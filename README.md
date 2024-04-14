@@ -2,6 +2,11 @@
 
 >A little memory allocator that could.
 
+## Roadmap
+
+- [x] Free list
+- [ ] Slab allocator
+
 ## Technical Details
 
 Initially I tried to use `std::optional` and `std::expected` as much as
