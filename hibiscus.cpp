@@ -1,5 +1,3 @@
-#include <cassert>
-#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
@@ -8,14 +6,12 @@
 #include <utility>
 #include <valgrind/memcheck.h>
 
-#include "chi/panic.h"
+#include "chi/assert.h"
 
 #include "block.h"
 #include "freelist.h"
 #include "hibiscus.h"
-
-// The page size of the system.
-const size_t PAGE_SIZE = sysconf(_SC_PAGESIZE);
+#include "page.h"
 
 // TODO: Consider extracting the common code between `split_page` and
 //       `split_block` into a helper function.
@@ -35,8 +31,9 @@ std::pair<hibiscus::Block *, hibiscus::Block *> split_page(void *page,
   const size_t left_size = sizeof(hibiscus::Block) + size;
 
   // Validate the arguments.
-  assert(page != nullptr);
-  assert(size != 0 && left_size <= PAGE_SIZE);
+  chi::assert(page != nullptr, "page must not be null");
+  chi::assert(size != 0 && left_size <= page::PAGE_SIZE,
+              "size must be non-zero and less than the page size");
 
   // Since we are splitting a page, we can override the headers as we wish.
   hibiscus::Block *const left = hibiscus::make_block(page);
@@ -46,13 +43,14 @@ std::pair<hibiscus::Block *, hibiscus::Block *> split_page(void *page,
   left->page = left;
 
   // If we can't make a right block, we'll need to extend the left block.
-  if (left_size + sizeof(hibiscus::Block) + 1 > PAGE_SIZE) {
-    left->size = PAGE_SIZE - sizeof(hibiscus::Block);
+  if (left_size + sizeof(hibiscus::Block) + 1 > page::PAGE_SIZE) {
+    left->size = page::PAGE_SIZE - sizeof(hibiscus::Block);
 
     return std::make_pair(left, nullptr);
   }
 
-  const size_t right_size = PAGE_SIZE - left_size - sizeof(hibiscus::Block);
+  const size_t right_size =
+      page::PAGE_SIZE - left_size - sizeof(hibiscus::Block);
   hibiscus::Block *const right =
       hibiscus::make_block(static_cast<std::byte *>(page) + left_size);
 
@@ -83,8 +81,9 @@ split_block(hibiscus::Block *block, size_t size) {
   const size_t left_size = sizeof(hibiscus::Block) + size;
 
   // Validate the arguments.
-  assert(block != nullptr);
-  assert(size != 0 && left_size <= total_size);
+  chi::assert(block != nullptr, "block must not be null");
+  chi::assert(size != 0 && left_size <= total_size,
+              "size must be non-zero and less than the total size");
 
   // If we can't make space for a right block, we can skip all the hard work.
   if (left_size + sizeof(hibiscus::Block) + 1 > total_size) {
@@ -134,73 +133,20 @@ split_block(hibiscus::Block *block, size_t size) {
   return std::make_pair(left, right);
 }
 
-// Get memory from the system.
-std::pair<void *, size_t> alloc(size_t size) {
-  if (size == 0) {
-    return std::make_pair(nullptr, 0);
-  }
-
-  // Request some multiple of the page size from the system.
-  // i.e. we want size < n * PAGE_SIZE => n = ceil(size / PAGE_SIZE)
-  size_t total = static_cast<size_t>(ceil(size / PAGE_SIZE)) * PAGE_SIZE;
-  assert(total % PAGE_SIZE == 0);
-
-  // NOTE: Consider using MAP_HUGETLB (and MAP_HUGE_2MB, MAP_HUGE_1GB) for
-  //       large allocations.
-  void *ptr = mmap(nullptr, total, PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-  if (ptr == MAP_FAILED) {
-    // The system didn't give us a page of memory, let's abort.
-    chi::panic("Failed to allocate memory from the system");
-  }
-
-  // Valgrind and friends do not know about the memory we just allocated, so
-  // we need to tell them about it.
-  VALGRIND_MALLOCLIKE_BLOCK(ptr, total, 0, 0);
-
-#ifdef DEBUG
-  std::cout << "Allocated " << total << " bytes at " << ptr << "\n\n";
-#endif
-
-  return std::make_pair(ptr, total);
-}
-
-// Grab a page from the system.
-std::pair<void *, size_t> page_alloc() { return alloc(PAGE_SIZE); }
-
-// Release a page back to the system.
-void page_free(void *ptr) {
-  // We can't free a null pointer.
-  if (ptr == nullptr) {
-    return;
-  }
-
-  if (munmap(ptr, PAGE_SIZE) == -1) {
-    // Trying to free the memory back to the system failed, this is beyond our
-    // pay grade, so we'll just panic.
-    chi::panic("Failed to free memory back to the kernel");
-  }
-
-  // Like during the allocation, we need to tell Valgrind about the memory we
-  // just freed.
-  VALGRIND_FREELIKE_BLOCK(ptr, 0);
-
-#ifdef DEBUG
-  std::cout << "Freed " << PAGE_SIZE << " bytes at " << ptr << "\n\n";
-#endif
-}
-
 namespace hibiscus {
 // Allocate a large block of memory.
 void *allocate_large(size_t size) {
-  assert(sizeof(Block) + size > PAGE_SIZE);
+  const size_t total = sizeof(Block) + size;
 
-  auto [ptr, total] = alloc(sizeof(Block) + size);
+#ifdef DEBUG
+  chi::assert(total > page::PAGE_SIZE, "size must be larger than a page");
+#endif
 
-  if (ptr == nullptr) {
-    return nullptr;
-  }
+  void *ptr = page::allocate(total);
+
+#ifdef DEBUG
+  chi::assert(ptr != nullptr, "ptr must not be null");
+#endif
 
   Block *block = make_block(ptr);
 
@@ -220,14 +166,14 @@ void *allocate(size_t size) {
   }
 
   // Requested allocation is larger than a page.
-  if (sizeof(Block) + size > PAGE_SIZE) {
+  if (sizeof(Block) + size > page::PAGE_SIZE) {
     void *ptr = allocate_large(size);
 
 #ifdef DEBUG
     dll::for_each(
-        [](Block *block) { std::cout << block->to_string() << std::endl; });
+        [](Block *block) { std::cout << block->to_string() << "\n"; });
 
-    std::cout << std::endl;
+    std::cout << "\n";
 #endif
 
     return ptr;
@@ -256,7 +202,7 @@ void *allocate(size_t size) {
     return left->data();
   }
 
-  auto [ptr, total] = page_alloc();
+  void *ptr = page::allocate(page::PAGE_SIZE);
   auto [left, right] = split_page(ptr, size);
 
   // Mark the left block as used.
@@ -266,10 +212,9 @@ void *allocate(size_t size) {
   dll::push_back(left);
 
 #ifdef DEBUG
-  dll::for_each(
-      [](Block *block) { std::cout << block->to_string() << std::endl; });
+  dll::for_each([](Block *block) { std::cout << block->to_string() << "\n"; });
 
-  std::cout << std::endl;
+  std::cout << "\n";
 #endif
 
   return left->data();
@@ -331,13 +276,15 @@ void free(void *ptr) {
   // release the page back to the system.
   if ((previous == nullptr || previous->page != header->page) &&
       (next == nullptr || next->page != header->page)) {
-    assert(header == header->page);
+    chi::assert(header == header->page, "header must be the page");
 
     // Before we release the page back to the system, we need to remove the run
     // from the free list.
     dll::remove(header);
 
-    page_free(header);
+    // FIXME: If the pointer that we are freeing is a large allocation, we need
+    //        to release all the pages that it occupies instead of just one.
+    page::free(header);
   } else {
     // Zero out the memory for safety reasons.
     header->zero();

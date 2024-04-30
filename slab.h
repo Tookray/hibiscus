@@ -30,8 +30,7 @@
 // A slab consists of one or more pages of virually contiguous memory carved up
 // into equal-size chunks, with a reference count indicating how many of those
 // chunks have been allocated.
-class Slab {
-};
+class Slab {};
 
 // If I'm understanding the structure of the slab allocator correctly...
 //
@@ -98,9 +97,9 @@ public:
 // `alignment` boundary. The alignment will always be rounded up to the minimum
 // allowable value, so `alignment` can be zero whenever no special alignment is
 // required.
-Cache* cache_create(const std::string &name, size_t size, size_t alignment,
-                   std::function<void(void *)> constructor,
-                   std::function<void(void *)> destructor);
+Cache *cache_create(const std::string &name, size_t size, size_t alignment,
+                    std::function<void(void *)> constructor,
+                    std::function<void(void *)> destructor);
 
 enum class AllocationFlag {
   // Acceptable to wait for memory if none is currently available.

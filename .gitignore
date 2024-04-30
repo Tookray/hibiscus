@@ -15,16 +15,5 @@
 !Makefile
 
 # Source files.
-!main.cpp
-
-!block.h
-!block.cpp
-
-!freelist.h
-!freelist.cpp
-
-!hibiscus.h
-!hibiscus.cpp
-
-!slab.h
-!slab.cpp
+!*.cpp
+!*.h

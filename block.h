@@ -5,6 +5,16 @@
 #include <format>
 #include <string>
 
+// The memory layout is as follows:
+//
+// - Page
+//   - Run
+//     - Block (metadata)
+//     - Data  (user data)
+//
+// A page consists of multiple runs, and a run consists of multiple block-data
+// pairs.
+
 namespace hibiscus {
 class Block {
 public:
@@ -14,14 +24,6 @@ public:
   // a list. This way we can easily coalesce adjacent free blocks (if possible)
   // to reduce fragmentation.
   bool free;
-
-  // +-----------------------------+
-  // |            Page             |
-  // +--------------+--------------+
-  // |     Run      |     Run      |
-  // +-------+------+-------+------+
-  // | Block | Data | Block | Data |
-  // +-------+------+-------+------+
 
   // The page that this block belongs to.
   Block *page;
@@ -50,6 +52,6 @@ public:
   }
 };
 
-// Treats the pointer like a block and zero initializes its members.
+// Zero initialize a block.
 Block *make_block(void *ptr);
 } // namespace hibiscus
