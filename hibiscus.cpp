@@ -170,8 +170,7 @@ void *allocate(size_t size) {
     void *ptr = allocate_large(size);
 
 #ifdef DEBUG
-    dll::for_each(
-        [](Block *block) { std::cout << block->to_string() << "\n"; });
+    dll::for_each([](Block *block) { std::cout << *block << "\n"; });
 
     std::cout << "\n";
 #endif
@@ -193,10 +192,9 @@ void *allocate(size_t size) {
     left->free = false;
 
 #ifdef DEBUG
-    dll::for_each(
-        [](Block *block) { std::cout << block->to_string() << std::endl; });
+    dll::for_each([](Block *block) { std::cout << *block << "\n"; });
 
-    std::cout << std::endl;
+    std::cout << "\n";
 #endif
 
     return left->data();
@@ -212,7 +210,7 @@ void *allocate(size_t size) {
   dll::push_back(left);
 
 #ifdef DEBUG
-  dll::for_each([](Block *block) { std::cout << block->to_string() << "\n"; });
+  dll::for_each([](Block *block) { std::cout << *block << "\n"; });
 
   std::cout << "\n";
 #endif
@@ -291,10 +289,9 @@ void free(void *ptr) {
   }
 
 #ifdef DEBUG
-  dll::for_each(
-      [](Block *block) { std::cout << block->to_string() << std::endl; });
+  dll::for_each([](Block *block) { std::cout << *block << "\n"; });
 
-  std::cout << std::endl;
+  std::cout << "\n";
 #endif
 }
 } // namespace hibiscus

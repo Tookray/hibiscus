@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstring>
 #include <format>
+#include <iostream>
 #include <string>
 
 // The memory layout is as follows:
@@ -45,10 +46,12 @@ public:
   // Zero out the data.
   void zero() { std::memset(data(), 0, size); }
 
-  std::string to_string() {
-    return std::format("Block(size={}, free={}, page={}, next={}, prev={})",
-                       size, free, static_cast<void *>(page),
-                       static_cast<void *>(next), static_cast<void *>(prev));
+  friend std::ostream &operator<<(std::ostream &os, Block &block) {
+    return os << std::format(
+               "Block(size={}, free={}, page={}, next={}, prev={})", block.size,
+               block.free, static_cast<void *>(block.page),
+               static_cast<void *>(block.next),
+               static_cast<void *>(block.prev));
   }
 };
 
