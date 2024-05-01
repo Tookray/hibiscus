@@ -15,23 +15,23 @@ void check(hibiscus::Block *list) {
 
   hibiscus::Block *current = list;
 
-  if (current->prev != nullptr) {
+  if (current->prev_ != nullptr) {
     chi::panic(
         "The head of the linked list should have a null previous pointer!");
   }
 
   while (current != nullptr) {
-    if (current->size == 0) {
+    if (current->size_ == 0) {
       chi::panic("The size of the block should not be zero!");
     }
 
-    if (current->next != nullptr && current->next->prev != current) {
+    if (current->next_ != nullptr && current->next_->prev_ != current) {
       chi::panic(
           "If the current block is not the last block in the list, then the "
           "next block's previous pointer should be the current block!");
     }
 
-    current = current->next;
+    current = current->next_;
   }
 }
 
@@ -45,13 +45,13 @@ void append(Block *block) {
 #endif
 
   assert(block != nullptr);
-  assert(block->size != 0);
+  assert(block->size_ != 0);
 
   Block *tail = back();
 
   if (tail != nullptr) {
-    tail->next = block;
-    block->prev = tail;
+    tail->next_ = block;
+    block->prev_ = tail;
   } else {
     list = block;
   }
@@ -68,8 +68,8 @@ Block *back() {
 
   Block *current = list;
 
-  while (current != nullptr && current->next != nullptr) {
-    current = current->next;
+  while (current != nullptr && current->next_ != nullptr) {
+    current = current->next_;
   }
 
   return current;
@@ -89,7 +89,7 @@ Block *first(std::function<bool(Block *)> predicate) {
       return current;
     }
 
-    current = current->next;
+    current = current->next_;
   }
 
   return nullptr;
@@ -101,7 +101,7 @@ void for_each(std::function<void(Block *)> callback) {
   while (current != nullptr) {
     callback(current);
 
-    current = current->next;
+    current = current->next_;
   }
 }
 
@@ -121,7 +121,7 @@ size_t len() {
   while (current != nullptr) {
     ++length;
 
-    current = current->next;
+    current = current->next_;
   }
 
   return length;
@@ -136,12 +136,12 @@ Block *pop_back() {
 
   Block *tail = back();
 
-  if (tail->prev != nullptr) {
-    tail->prev->next = nullptr;
+  if (tail->prev_ != nullptr) {
+    tail->prev_->next_ = nullptr;
   }
 
   // Detach the node from the list.
-  tail->prev = nullptr;
+  tail->prev_ = nullptr;
 
 #ifdef DEBUG
   check(list);
@@ -160,15 +160,15 @@ Block *pop_front() {
 
   Block *head = list;
 
-  if (head->next != nullptr) {
-    head->next->prev = nullptr;
+  if (head->next_ != nullptr) {
+    head->next_->prev_ = nullptr;
 
-    list = head->next;
+    list = head->next_;
   } else {
     list = nullptr;
   }
 
-  head->next = nullptr;
+  head->next_ = nullptr;
 
 #ifdef DEBUG
   check(list);
@@ -190,17 +190,17 @@ void push_front(Block *block) {
 #endif
 
   assert(block != nullptr);
-  assert(block->size != 0);
+  assert(block->size_ != 0);
 
   if (list == nullptr) {
     list = block;
   } else {
     // Make sure that the block's previous pointer is a null pointer since it
     // is the new head of the list.
-    list->prev = block;
+    list->prev_ = block;
 
     // Link the block to the current head of the list.
-    block->next = list;
+    block->next_ = list;
 
     // Update the head of the list.
     list = block;
@@ -223,20 +223,20 @@ void remove(Block *block) {
   }
 #endif
 
-  if (block->prev != nullptr) {
-    block->prev->next = block->next;
+  if (block->prev_ != nullptr) {
+    block->prev_->next_ = block->next_;
   }
 
-  if (block->next != nullptr) {
-    block->next->prev = block->prev;
+  if (block->next_ != nullptr) {
+    block->next_->prev_ = block->prev_;
   }
 
   if (block == list) {
-    list = block->next;
+    list = block->next_;
   }
 
-  block->next = nullptr;
-  block->prev = nullptr;
+  block->next_ = nullptr;
+  block->prev_ = nullptr;
 
 #ifdef DEBUG
   check(list);

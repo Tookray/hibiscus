@@ -17,20 +17,21 @@
 // pairs.
 
 namespace hibiscus {
+
 class Block {
 public:
-  size_t size;
+  size_t size_;
 
   // To keep it simple, let's store all the blocks (both free and allocated) in
   // a list. This way we can easily coalesce adjacent free blocks (if possible)
   // to reduce fragmentation.
-  bool free;
+  bool free_;
 
   // The page that this block belongs to.
-  Block *page;
+  Block *page_;
 
-  Block *next;
-  Block *prev;
+  Block *next_;
+  Block *prev_;
 
   // No default constructor please!
   Block() = delete;
@@ -44,17 +45,53 @@ public:
   }
 
   // Zero out the data.
-  void zero() { std::memset(data(), 0, size); }
+  void zero() { std::memset(data(), 0, size_); }
 
   friend std::ostream &operator<<(std::ostream &os, Block &block) {
     return os << std::format(
-               "Block(size={}, free={}, page={}, next={}, prev={})", block.size,
-               block.free, static_cast<void *>(block.page),
-               static_cast<void *>(block.next),
-               static_cast<void *>(block.prev));
+               "Block(size={}, free={}, page={}, next={}, prev={})",
+               block.size_, block.free_, static_cast<void *>(block.page_),
+               static_cast<void *>(block.next_),
+               static_cast<void *>(block.prev_));
+  }
+
+  // Let's try using the builder pattern and see how it feels.
+
+  Block *size(const size_t size) {
+    this->size_ = size;
+
+    return this;
+  }
+
+  Block *free() {
+    this->free_ = true;
+
+    return this;
+  }
+
+  Block *used() {
+    this->free_ = false;
+
+    return this;
+  }
+
+  Block *page(Block *page) {
+    this->page_ = page;
+
+    return this;
+  }
+
+  Block *next(Block *next) {
+    this->next_ = next;
+
+    return this;
+  }
+
+  Block *prev(Block *prev) {
+    this->prev_ = prev;
+
+    return this;
   }
 };
 
-// Zero initialize a block.
-Block *make_block(void *ptr);
 } // namespace hibiscus

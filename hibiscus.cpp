@@ -19,48 +19,46 @@
 // Split a page into two free blocks, one with data size `size` and the other
 // with the remaining size.
 std::pair<hibiscus::Block *, hibiscus::Block *> split_page(void *page,
-                                                           size_t size) {
-  // +-----------------------------+
-  // |            total            |
-  // +--------------+--------------+
-  // |     left     |    right     |
-  // +--------------+--------------+
-  // | Block | size | Block | Data |
-  // +--------------+--------------+
+                                                           const size_t size) {
+#ifdef DEBUG
+  chi::assert(page != nullptr, "page must not be null");
+  chi::assert(0 < size && size <= page::PAGE_SIZE,
+              "size must be between (0, PAGE_SIZE]");
+#endif
 
   const size_t left_size = sizeof(hibiscus::Block) + size;
 
-  // Validate the arguments.
-  chi::assert(page != nullptr, "page must not be null");
-  chi::assert(size != 0 && left_size <= page::PAGE_SIZE,
-              "size must be non-zero and less than the page size");
-
   // Since we are splitting a page, we can override the headers as we wish.
-  hibiscus::Block *const left = hibiscus::make_block(page);
-
-  left->size = size;
-  left->free = true;
-  left->page = left;
+  hibiscus::Block *const left = static_cast<hibiscus::Block *>(page)
+                                    ->size(size)
+                                    ->free()
+                                    ->page(static_cast<hibiscus::Block *>(page))
+                                    ->next(nullptr)
+                                    ->prev(nullptr);
 
   // If we can't make a right block, we'll need to extend the left block.
   if (left_size + sizeof(hibiscus::Block) + 1 > page::PAGE_SIZE) {
-    left->size = page::PAGE_SIZE - sizeof(hibiscus::Block);
+    // FIXME: I don't like how I'm directly modifying the header's member here.
+    left->size_ = page::PAGE_SIZE - sizeof(hibiscus::Block);
 
     return std::make_pair(left, nullptr);
   }
 
   const size_t right_size =
       page::PAGE_SIZE - left_size - sizeof(hibiscus::Block);
-  hibiscus::Block *const right =
-      hibiscus::make_block(static_cast<std::byte *>(page) + left_size);
 
-  right->size = right_size;
-  right->free = true;
-  right->page = left;
+  // FIXME: Avoid using 'reinterpret_cast' here.
+  hibiscus::Block *const right = reinterpret_cast<hibiscus::Block *>(
+                                     static_cast<std::byte *>(page) + left_size)
+                                     ->size(right_size)
+                                     ->free()
+                                     ->page(left)
+                                     ->next(nullptr)
+                                     ->prev(left);
 
-  // Link the two blocks together.
-  left->next = right;
-  right->prev = left;
+  // FIXME: Again, I don't like how I'm setting 'size_' here.
+  // Stitch the left block with the right block.
+  left->next_ = right;
 
   return std::make_pair(left, right);
 }
@@ -69,43 +67,39 @@ std::pair<hibiscus::Block *, hibiscus::Block *> split_page(void *page,
 // with the remaining size.
 std::pair<hibiscus::Block *, hibiscus::Block *>
 split_block(hibiscus::Block *block, size_t size) {
-  // +-----------------------------+
-  // |            total            |
-  // +--------------+--------------+
-  // |     left     |    right     |
-  // +--------------+--------------+
-  // | Block | size | Block | Data |
-  // +--------------+--------------+
-
-  const size_t total_size = sizeof(hibiscus::Block) + block->size;
+  // FIXME: Another instance of directly accessing 'size_'.
+  const size_t total_size = sizeof(hibiscus::Block) + block->size_;
   const size_t left_size = sizeof(hibiscus::Block) + size;
 
-  // Validate the arguments.
+#ifdef DEBUG
   chi::assert(block != nullptr, "block must not be null");
   chi::assert(size != 0 && left_size <= total_size,
-              "size must be non-zero and less than the total size");
+              "size must be non-zero and the left size must be less than the "
+              "total size");
+#endif
 
   // If we can't make space for a right block, we can skip all the hard work.
   if (left_size + sizeof(hibiscus::Block) + 1 > total_size) {
-    block->free = true;
+    // FIXME: Member access.
+    block->free_ = true;
 
     return std::make_pair(block, nullptr);
   }
 
   // We are modifying a pre-existing block, so we should be careful how we
   // modify the header's members.
-  hibiscus::Block *const left = block;
-
-  left->size = size;
-  left->free = true;
+  hibiscus::Block *const left = block->size(size)->free();
 
   const size_t right_size = total_size - left_size - sizeof(hibiscus::Block);
-  hibiscus::Block *const right =
-      hibiscus::make_block(reinterpret_cast<std::byte *>(block) + left_size);
 
-  right->size = right_size;
-  right->free = true;
-  right->page = left->page;
+  hibiscus::Block *const right =
+      reinterpret_cast<hibiscus::Block *>(reinterpret_cast<std::byte *>(block) +
+                                          left_size)
+          ->size(right_size)
+          ->free()
+          ->page(left->page_)
+          ->next(nullptr)
+          ->prev(nullptr);
 
   // We'll need to go from:
   //
@@ -119,15 +113,15 @@ split_block(hibiscus::Block *block, size_t size) {
   // | Previous | Left | Right | Next |
   // +----------+------+-------+------+
 
-  hibiscus::Block *const next = left->next;
+  hibiscus::Block *const next = left->next_;
 
-  left->next = right;
-  right->prev = left;
+  left->next_ = right;
+  right->prev_ = left;
 
   if (next != nullptr) {
-    right->next = next; // This doesn't need to be in here, but I think it's
-                        // clearer this way.
-    next->prev = right;
+    right->next_ = next; // This doesn't need to be in here, but I think it's
+                         // clearer this way.
+    next->prev_ = right;
   }
 
   return std::make_pair(left, right);
@@ -148,10 +142,12 @@ void *allocate_large(size_t size) {
   chi::assert(ptr != nullptr, "ptr must not be null");
 #endif
 
-  Block *block = make_block(ptr);
-
-  block->size = total;
-  block->page = block;
+  Block *block = static_cast<Block *>(ptr)
+                     ->size(total)
+                     ->used()
+                     ->page(static_cast<Block *>(ptr))
+                     ->next(nullptr)
+                     ->prev(nullptr);
 
   // Add the block to the free list to keep track of it.
   dll::push_back(block);
@@ -180,7 +176,7 @@ void *allocate(size_t size) {
 
   // Grab the first block that is free and large enough.
   Block *block = dll::first([size](hibiscus::Block *block) {
-    return block->free && block->size >= size;
+    return block->free_ && block->size_ >= size;
   });
 
   // We found a pre-existing block that is large enough.
@@ -189,7 +185,7 @@ void *allocate(size_t size) {
     auto [left, right] = split_block(block, size);
 
     // Mark the left block as used.
-    left->free = false;
+    left->free_ = false;
 
 #ifdef DEBUG
     dll::for_each([](Block *block) { std::cout << *block << "\n"; });
@@ -204,7 +200,7 @@ void *allocate(size_t size) {
   auto [left, right] = split_page(ptr, size);
 
   // Mark the left block as used.
-  left->free = false;
+  left->free_ = false;
 
   // Since this is a new run, we'll need to add it to the free list.
   dll::push_back(left);
@@ -226,23 +222,24 @@ void free(void *ptr) {
   Block *header = static_cast<Block *>(ptr) - 1;
 
   // Mark the block as free.
-  header->free = true;
+  header->free_ = true;
 
   // +----------+--------+------+
   // | Previous | Header | Next |
   // +----------+--------+------+
 
-  Block *previous = header->prev;
-  Block *next = header->next;
+  Block *previous = header->prev_;
+  Block *next = header->next_;
 
   // Coalesce the block with the previous and next blocks if they are free and
   // they are part of the same run (i.e. they point to the same page).
-  if (previous != nullptr && previous->free && previous->page == header->page) {
-    previous->size += sizeof(Block) + header->size;
-    previous->next = next;
+  if (previous != nullptr && previous->free_ &&
+      previous->page_ == header->page_) {
+    previous->size_ += sizeof(Block) + header->size_;
+    previous->next_ = next;
 
     if (next != nullptr) {
-      next->prev = previous;
+      next->prev_ = previous;
     }
 
     header = previous;
@@ -252,12 +249,12 @@ void free(void *ptr) {
   // | Previous + Header | Next |
   // +-------------------+------+
 
-  if (next != nullptr && next->free && next->page == header->page) {
-    header->size += sizeof(Block) + next->size;
-    header->next = next->next;
+  if (next != nullptr && next->free_ && next->page_ == header->page_) {
+    header->size_ += sizeof(Block) + next->size_;
+    header->next_ = next->next_;
 
-    if (next->next != nullptr) {
-      next->next->prev = header;
+    if (next->next_ != nullptr) {
+      next->next_->prev_ = header;
     }
 
     // Stop using 'next'.
@@ -266,15 +263,15 @@ void free(void *ptr) {
 
   // In case we coalesced the block with the previous and/or next blocks, we
   // need to update the previous and next pointers.
-  previous = header->prev;
-  next = header->next;
+  previous = header->prev_;
+  next = header->next_;
 
   // If the previous block is a null pointer or it's from a different run and
   // the next block is a null pointer or it's from a different run, then we can
   // release the page back to the system.
-  if ((previous == nullptr || previous->page != header->page) &&
-      (next == nullptr || next->page != header->page)) {
-    chi::assert(header == header->page, "header must be the page");
+  if ((previous == nullptr || previous->page_ != header->page_) &&
+      (next == nullptr || next->page_ != header->page_)) {
+    chi::assert(header == header->page_, "header must be the page");
 
     // Before we release the page back to the system, we need to remove the run
     // from the free list.
