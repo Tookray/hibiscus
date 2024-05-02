@@ -7,11 +7,11 @@
 #include <valgrind/memcheck.h>
 
 #include "chi/assert.h"
+#include "chi/page.h"
 
 #include "block.h"
 #include "freelist.h"
 #include "hibiscus.h"
-#include "page.h"
 
 // TODO: Consider extracting the common code between `split_page` and
 //       `split_block` into a helper function.
@@ -22,7 +22,7 @@ std::pair<hibiscus::Block *, hibiscus::Block *> split_page(void *page,
                                                            const size_t size) {
 #ifdef DEBUG
   chi::assert(page != nullptr, "page must not be null");
-  chi::assert(0 < size && size <= page::PAGE_SIZE,
+  chi::assert(0 < size && size <= chi::page::PAGE_SIZE,
               "size must be between (0, PAGE_SIZE]");
 #endif
 
@@ -37,15 +37,15 @@ std::pair<hibiscus::Block *, hibiscus::Block *> split_page(void *page,
                                     ->prev(nullptr);
 
   // If we can't make a right block, we'll need to extend the left block.
-  if (left_size + sizeof(hibiscus::Block) + 1 > page::PAGE_SIZE) {
+  if (left_size + sizeof(hibiscus::Block) + 1 > chi::page::PAGE_SIZE) {
     // FIXME: I don't like how I'm directly modifying the header's member here.
-    left->size_ = page::PAGE_SIZE - sizeof(hibiscus::Block);
+    left->size_ = chi::page::PAGE_SIZE - sizeof(hibiscus::Block);
 
     return std::make_pair(left, nullptr);
   }
 
   const size_t right_size =
-      page::PAGE_SIZE - left_size - sizeof(hibiscus::Block);
+      chi::page::PAGE_SIZE - left_size - sizeof(hibiscus::Block);
 
   // FIXME: Avoid using 'reinterpret_cast' here.
   hibiscus::Block *const right = reinterpret_cast<hibiscus::Block *>(
@@ -133,10 +133,10 @@ void *allocate_large(size_t size) {
   const size_t total = sizeof(Block) + size;
 
 #ifdef DEBUG
-  chi::assert(total > page::PAGE_SIZE, "size must be larger than a page");
+  chi::assert(total > chi::page::PAGE_SIZE, "size must be larger than a page");
 #endif
 
-  void *ptr = page::allocate(total);
+  void *ptr = chi::page::allocate(total);
 
 #ifdef DEBUG
   chi::assert(ptr != nullptr, "ptr must not be null");
@@ -162,7 +162,7 @@ void *allocate(size_t size) {
   }
 
   // Requested allocation is larger than a page.
-  if (sizeof(Block) + size > page::PAGE_SIZE) {
+  if (sizeof(Block) + size > chi::page::PAGE_SIZE) {
     void *ptr = allocate_large(size);
 
 #ifdef DEBUG
@@ -196,7 +196,7 @@ void *allocate(size_t size) {
     return left->data();
   }
 
-  void *ptr = page::allocate(page::PAGE_SIZE);
+  void *ptr = chi::page::allocate(chi::page::PAGE_SIZE);
   auto [left, right] = split_page(ptr, size);
 
   // Mark the left block as used.
@@ -279,7 +279,7 @@ void free(void *ptr) {
 
     // FIXME: If the pointer that we are freeing is a large allocation, we need
     //        to release all the pages that it occupies instead of just one.
-    page::free(header);
+    chi::assert(chi::page::free(header), "failed to free page");
   } else {
     // Zero out the memory for safety reasons.
     header->zero();
