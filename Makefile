@@ -32,13 +32,22 @@ TARGET = hibiscus
 # Source files.
 SOURCES = main.cpp freelist.cpp hibiscus.cpp chi/page.cpp chi/panic.cpp
 
+STYLE = '{                                       \
+        AllowShortFunctionsOnASingleLine: Empty, \
+        AlwaysBreakTemplateDeclarations: Yes,    \
+        IndentWidth: 8,                          \
+        IndentAccessModifiers: false,            \
+        AccessModifierOffset: -8,                \
+        ColumnLimit: 120                         \
+}'
+
 all: $(TARGET)
 
 $(TARGET): $(SOURCES)
 	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCES)
 
 format:
-	clang-format -i *.cpp *.h
+	clang-format --style=$(STYLE) -i *.cpp *.h
 
 clean:
 	rm -f $(TARGET)

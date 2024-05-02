@@ -1,246 +1,242 @@
-#include <cassert>
-#include <functional>
+#include <cstddef>
+#include <iostream>
 
+#include "chi/assert.h"
+#include "chi/page.h"
 #include "chi/panic.h"
 
 #include "block.h"
 #include "freelist.h"
+#include "list.h"
 
-// A santiy check to confirm that the list is in a valid state. This should
-// only be called in debug mode.
-void check(hibiscus::Block *list) {
-  if (list == nullptr) {
-    return;
-  }
+// Since the memory that we have is a continuous, let's go with the following
+// layout for now (we can always change it later):
+//
+// +-------+-----------+------+
+// | Node  | *previous | 0x00 |
+// |       | *next     | 0x01 |
+// |       | *value    | 0x02 ----+
+// +-------+-----------+------+   |
+// | Node  | size      | 0x03 <---+
+// |       | free      | 0x04 |
+// |       | *page     | 0x05 |
+// |       | *data     | 0x06 ----+
+// +-------+-----------+------+   |
+// | Data  |           | 0x07 <---+
+// |       |           | ...  |
+// + ------+-----------+----- +
+//
+// For the above layout, the value and data pointers are unnecessary (since we
+// can simply compute where the block and data are), but I think this will make
+// it easier to change the layout down the line.
 
-  hibiscus::Block *current = list;
-
-  if (current->prev_ != nullptr) {
-    chi::panic(
-        "The head of the linked list should have a null previous pointer!");
-  }
-
-  while (current != nullptr) {
-    if (current->size_ == 0) {
-      chi::panic("The size of the block should not be zero!");
-    }
-
-    if (current->next_ != nullptr && current->next_->prev_ != current) {
-      chi::panic(
-          "If the current block is not the last block in the list, then the "
-          "next block's previous pointer should be the current block!");
-    }
-
-    current = current->next_;
-  }
+bool same_address(void *lhs, void *rhs) {
+        return lhs == rhs;
 }
 
-namespace hibiscus::dll {
-Block *list = nullptr;
+Node<Block *> *make_node_from_page(void *page) {
+        // NOTE: Perhaps we should avoid using C-style casts.
+        Node<Block *> *node = (Node<Block *> *)page;
+        Block *block = (Block *)((std::byte *)page + sizeof(Node<Block *>));
+        void *data = (void *)((std::byte *)page + sizeof(Node<Block *>) + sizeof(Block));
 
-void append(Block *block) {
-#ifdef DEBUG
-  check(list);
-  check(block);
-#endif
+        node->previous = nullptr;
+        node->next = nullptr;
+        node->value = block;
 
-  assert(block != nullptr);
-  assert(block->size_ != 0);
+        block->size = chi::page::PAGE_SIZE - sizeof(Node<Block *>) - sizeof(Block);
+        block->free = true;
+        block->page = page;
+        block->data = data;
 
-  Block *tail = back();
-
-  if (tail != nullptr) {
-    tail->next_ = block;
-    block->prev_ = tail;
-  } else {
-    list = block;
-  }
-
-#ifdef DEBUG
-  check(list);
-#endif
+        return node;
 }
 
-Block *back() {
-  if (list == nullptr) {
-    return nullptr;
-  }
+// NOTE: The split function modifies the current node's block but not the node
+//       itself.
+Node<Block *> *split_node(Node<Block *> *node, size_t requested_size) {
+        Block *block = node->value;
 
-  Block *current = list;
+        chi::assert(block != nullptr, "Block is null");
+        chi::assert(block->free, "Block is not free");
+        chi::assert(block->size >= requested_size, "Block is too small");
 
-  while (current != nullptr && current->next_ != nullptr) {
-    current = current->next_;
-  }
+        // Hold at least 1 byte of data.
+        size_t const minimum_size = sizeof(Node<Block *>) + sizeof(Block) + 1;
 
-  return current;
+        if (block->size < minimum_size) {
+                return nullptr;
+        }
+
+        // NOTE: Again, probably should avoid using C-style casts.
+        Node<Block *> *remaining =
+            (Node<Block *> *)((std::byte *)node + sizeof(Node<Block *>) + sizeof(Block) + requested_size);
+        Block *remaining_block = (Block *)((std::byte *)remaining + sizeof(Node<Block *>));
+        void *remaining_data = (void *)((std::byte *)remaining + sizeof(Node<Block *>) + sizeof(Block));
+
+        remaining->previous = nullptr;
+        remaining->next = nullptr;
+        remaining->value = remaining_block;
+
+        remaining_block->size = block->size - sizeof(Node<Block *>) - sizeof(Block) - requested_size;
+        remaining_block->free = true;
+        remaining_block->page = block->page;
+        remaining_block->data = remaining_data;
+
+        block->size = requested_size;
+
+        return remaining;
 }
 
-void clear() { chi::panic("Why are you trying to clear the free list?"); }
-
-bool contains(Block *block) {
-  return first([block](Block *current) { return current == block; }) != nullptr;
+void FreeListAllocator::initialize() {
+        // Do nothing.
 }
 
-Block *first(std::function<bool(Block *)> predicate) {
-  Block *current = list;
+void *FreeListAllocator::allocate(size_t size) {
+        if (size == 0) {
+                return nullptr;
+        }
 
-  while (current != nullptr) {
-    if (predicate(current)) {
-      return current;
-    }
+        size_t const total = sizeof(Node<Block *>) + sizeof(Block) + size;
 
-    current = current->next_;
-  }
+        if (total > chi::page::PAGE_SIZE) {
+                // TODO: Implement support for large allocations.
+                chi::panic("Large allocations are not supported");
+        }
 
-  return nullptr;
+        std::cout << "Searching for a block\n";
+
+        // Search for a satisfying block.
+        Node<Block *> *current = blocks.front();
+
+        while (current != nullptr) {
+                Block *block = current->value;
+                chi::assert(block != nullptr, "Block is null");
+
+                if (block->free && block->size >= size) {
+                        std::cout << "Found a block\n";
+
+                        Node<Block *> *remaining = split_node(current, size);
+
+                        if (remaining != nullptr) {
+                                blocks.insert_after(current, remaining);
+                        }
+
+                        current->value->free = false;
+
+                        std::cout << "Returning pointer to data\n";
+                        return current->value->data;
+                }
+
+                current = current->next;
+        }
+
+        std::cout << "Allocating a new page\n";
+        void *page = chi::page::allocate(chi::page::PAGE_SIZE);
+
+        if (page == nullptr) {
+                chi::panic("MMAP failed");
+        }
+
+        std::cout << "Creating a new block from page\n";
+        Node<Block *> *node = make_node_from_page(page);
+        chi::assert(node != nullptr, "Node is null");
+
+        blocks.push_back(node);
+
+        Node<Block *> *remaining = split_node(node, size);
+
+        if (remaining != nullptr) {
+                blocks.push_back(remaining);
+        }
+
+        node->value->free = false;
+
+        std::cout << "Returning pointer to data\n";
+        return node->value->data;
 }
 
-void for_each(std::function<void(Block *)> callback) {
-  Block *current = list;
+void FreeListAllocator::free(void *ptr) {
+        if (ptr == nullptr) {
+                return;
+        }
 
-  while (current != nullptr) {
-    callback(current);
+        std::cout << "Searching for matching block\n";
+        Node<Block *> *current = blocks.front();
 
-    current = current->next_;
-  }
+        while (current != nullptr) {
+                Block *block = current->value;
+                chi::assert(block != nullptr, "Block is null");
+
+                if (block->data == ptr) {
+                        break;
+                }
+
+                current = current->next;
+        }
+
+        if (current == nullptr) {
+                // NOTE: Unless the caller is trying to free a block that was not allocated
+                //       from this allocator, we should never reach this point.
+                chi::panic("Block not found");
+        }
+
+        std::cout << "Matching block found\n";
+
+        Block *current_block = current->value;
+        chi::assert(!current_block->free, "Block should be in use");
+
+        current_block->free = true;
+
+        // We can coalesce the block with the previous and next blocks if they
+        // are both free and belong to the same page.
+
+        std::cout << "Trying to coalesce with adjacent blocks\n";
+
+        Node<Block *> *previous = current->previous;
+
+        if (previous != nullptr) {
+                Block *previous_block = previous->value;
+
+                if (previous_block->free && previous_block->page == current_block->page) {
+                        std::cout << "Coalescing with previous block\n";
+                        chi::assert(same_address(static_cast<std::byte *>(previous_block->data) +
+                                                     sizeof(Node<Block *>) + sizeof(Block) + previous_block->size,
+                                                 current_block->data),
+                                    "Previous and current blocks are not adjacent");
+
+                        previous_block->size += sizeof(Node<Block *>) + sizeof(Block) + current_block->size;
+                        blocks.remove(current);
+
+                        current = previous;
+                        current_block = previous_block;
+                }
+        }
+
+        Node<Block *> *next = current->next;
+
+        if (next != nullptr) {
+                Block *next_block = next->value;
+
+                if (next_block->free && next_block->page == current_block->page) {
+                        std::cout << "Coalescing with next block\n";
+                        chi::assert(same_address(static_cast<std::byte *>(current_block->data) + sizeof(Node<Block *>) +
+                                                     sizeof(Block) + current_block->size,
+                                                 next_block->data),
+                                    "Current and next blocks are not adjacent");
+
+                        current_block->size += sizeof(Node<Block *>) + sizeof(Block) + next_block->size;
+                        blocks.remove(next);
+                }
+        }
+
+        // If the entire page is free, we can deallocate it.
+        if (sizeof(Node<Block *>) + sizeof(Block) + current_block->size == chi::page::PAGE_SIZE) {
+                void *page = current_block->page;
+
+                blocks.remove(current);
+
+                std::cout << "Deallocating page\n";
+                chi::assert(chi::page::free(page), "MUNMAP failed");
+        }
 }
-
-Block *front() {
-  if (list == nullptr) {
-    return nullptr;
-  }
-
-  return list;
-}
-
-size_t len() {
-  size_t length = 0;
-
-  Block *current = list;
-
-  while (current != nullptr) {
-    ++length;
-
-    current = current->next_;
-  }
-
-  return length;
-}
-
-Block *pop_back() {
-  assert(list != nullptr);
-
-#ifdef DEBUG
-  check(list);
-#endif
-
-  Block *tail = back();
-
-  if (tail->prev_ != nullptr) {
-    tail->prev_->next_ = nullptr;
-  }
-
-  // Detach the node from the list.
-  tail->prev_ = nullptr;
-
-#ifdef DEBUG
-  check(list);
-  check(tail);
-#endif
-
-  return tail;
-}
-
-Block *pop_front() {
-  assert(list != nullptr);
-
-#ifdef DEBUG
-  check(list);
-#endif
-
-  Block *head = list;
-
-  if (head->next_ != nullptr) {
-    head->next_->prev_ = nullptr;
-
-    list = head->next_;
-  } else {
-    list = nullptr;
-  }
-
-  head->next_ = nullptr;
-
-#ifdef DEBUG
-  check(list);
-  check(head);
-#endif
-
-  return head;
-}
-
-void push_back(Block *block) {
-  // This function is the same as calling 'append'.
-  append(block);
-}
-
-void push_front(Block *block) {
-#ifdef DEBUG
-  check(block);
-  check(list);
-#endif
-
-  assert(block != nullptr);
-  assert(block->size_ != 0);
-
-  if (list == nullptr) {
-    list = block;
-  } else {
-    // Make sure that the block's previous pointer is a null pointer since it
-    // is the new head of the list.
-    list->prev_ = block;
-
-    // Link the block to the current head of the list.
-    block->next_ = list;
-
-    // Update the head of the list.
-    list = block;
-  }
-
-#ifdef DEBUG
-  check(list);
-#endif
-}
-
-void remove(Block *block) {
-  assert(block != nullptr);
-
-#ifdef DEBUG
-  check(list);
-
-  // Make sure that the block is in the list.
-  if (!contains(block)) {
-    chi::panic("Why are you trying to remove a block that is not in the list?");
-  }
-#endif
-
-  if (block->prev_ != nullptr) {
-    block->prev_->next_ = block->next_;
-  }
-
-  if (block->next_ != nullptr) {
-    block->next_->prev_ = block->prev_;
-  }
-
-  if (block == list) {
-    list = block->next_;
-  }
-
-  block->next_ = nullptr;
-  block->prev_ = nullptr;
-
-#ifdef DEBUG
-  check(list);
-  check(block);
-#endif
-}
-} // namespace hibiscus::dll

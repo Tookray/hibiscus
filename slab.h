@@ -55,10 +55,10 @@ class Slab {};
 
 class Statistics {
 public:
-  // TODO:
-  // - [ ] Total allocations
-  // - [ ] Allocated objects
-  // - [ ] Freed objects
+        // TODO:
+        // - [ ] Total allocations
+        // - [ ] Allocated objects
+        // - [ ] Freed objects
 };
 
 // At startup, the system creates a set of about 30 caches ranging in size from
@@ -69,44 +69,43 @@ public:
 // object. On the contrary, using a template would just make our binary bigger.
 class Cache {
 public:
-  // NOTE: Debug related members.
-  std::string name;
+        // NOTE: Debug related members.
+        std::string name;
 
-  // It says in the paper that:
-  //
-  // `name` identifies the cache for statistics and debugging.
-  //
-  // Does this mean that we should store the statistics in the cache or should
-  // we have a separate object for that?
-  Statistics stats;
+        // It says in the paper that:
+        //
+        // `name` identifies the cache for statistics and debugging.
+        //
+        // Does this mean that we should store the statistics in the cache or should
+        // we have a separate object for that?
+        Statistics stats;
 
-  size_t size;
+        size_t size;
 
-  // Alignment boundary.
-  size_t alignment;
+        // Alignment boundary.
+        size_t alignment;
 
-  // Object constructor and destructor.
-  std::function<void(void *)> constructor;
-  std::function<void(void *)> destructor;
+        // Object constructor and destructor.
+        std::function<void(void *)> constructor;
+        std::function<void(void *)> destructor;
 
-  // Don't use the empty constructor.
-  Cache() = delete;
+        // Don't use the empty constructor.
+        Cache() = delete;
 };
 
 // Creates a cache of objects, each with size `size` and aligned on an
 // `alignment` boundary. The alignment will always be rounded up to the minimum
 // allowable value, so `alignment` can be zero whenever no special alignment is
 // required.
-Cache *cache_create(const std::string &name, size_t size, size_t alignment,
-                    std::function<void(void *)> constructor,
+Cache *cache_create(const std::string &name, size_t size, size_t alignment, std::function<void(void *)> constructor,
                     std::function<void(void *)> destructor);
 
 enum class AllocationFlag {
-  // Acceptable to wait for memory if none is currently available.
-  sleep,
+        // Acceptable to wait for memory if none is currently available.
+        sleep,
 
-  // Not acceptable to wait for memory if none is currently available.
-  nosleep,
+        // Not acceptable to wait for memory if none is currently available.
+        nosleep,
 };
 
 // User interface to the slab allocator ---------------------------------------
